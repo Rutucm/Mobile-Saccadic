@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Juego Sacádico Móvil</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: Arial, sans-serif;
+            overscroll-behavior: contain;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #f0f0f0;
+        }
+        #start-screen, #game-screen {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        #game-container {
+            position: relative;
+            width: 90vw;
+            height: 50vh;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        #circle {
+            position: absolute;
+            background-color: red;
+            border-radius: 50%;
+            will-change: transform;
+        }
+        #level-display, #jump-size-display {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        .button-container {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        button {
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            touch-action: manipulation;
+        }
+        #arrows {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 300px;
+            margin-top: 10px;
+        }
+        .arrow {
+            font-size: 24px;
+            cursor: pointer;
+            user-select: none;
+            padding: 10px;
+            background-color: #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="start-screen">
+        <h1>Juego Sacádico</h1>
+        <div class="button-container">
+            <button onclick="startGame('easy')">Fácil</button>
+            <button onclick="startGame('medium')">Medio</button>
+            <button onclick="startGame('hard')">Difícil</button>
+        </div>
+    </div>
+
+    <div id="game-screen" style="display: none;">
+        <div id="level-display">Nivel: 1</div>
+        <div id="jump-size-display">Amplitud del salto: 6 cm</div>
+        <div id="game-container">
+            <div id="circle"></div>
+        </div>
+        <div id="arrows">
+            <span id="decrease" class="arrow">▼</span>
+            <span id="increase" class="arrow">▲</span>
+        </div>
+        <div class="button-container">
+            <button onclick="nextLevel()">Siguiente Nivel</button>
+            <button onclick="togglePause()">Pausa</button>
+            <button onclick="backToMenu()">Volver al Menú</button>
+        </div>
+    </div>
+
+    <script>
+        let level = 1;
+        let jumpSize = 6; // cm
+        let circleSize; // cm
+        let isPaused = false;
+        let animationFrameId;
+        let lastTimestamp = 0;
+        let currentX = 0;
+        let currentY = 0;
+        const colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
+        let currentColorIndex = 0;
+
+        function cmToPx(cm) {
+            return cm * 37.795275591; // 1 cm ≈ 37.8 px
+        }
+
+        function startGame(difficulty) {
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'flex';
+            
+            switch(difficulty) {
+                case 'easy':
+                    circleSize = 2;
+                    break;
+                case 'medium':
+                    circleSize = 1;
+                    break;
+                case 'hard':
+                    circleSize = 0.5;
+                    break;
+            }
+            
+            resetGame();
+        }
+
+        function resetGame() {
+            level = 1;
+            jumpSize = 6;
+            currentX = 0;
+            currentY = 0;
+            updateLevel();
+            updateJumpSizeDisplay();
+            updateCircleSize();
+            startMovement();
+        }
+
+        function updateLevel() {
+            document.getElementById('level-display').textContent = `Nivel: ${level}`;
+            changeCircleColor();
+        }
+
+        function updateJumpSizeDisplay() {
+            document.getElementById('jump-size-display').textContent = `Amplitud del salto: ${jumpSize} cm`;
+        }
+
+        function updateCircleSize() {
+            const circle = document.getElementById('circle');
+            const sizePx = cmToPx(circleSize);
+            circle.style.width = `${sizePx}px`;
+            circle.style.height = `${sizePx}px`;
+        }
+
+        function startMovement() {
+            cancelAnimationFrame(animationFrameId);
+            lastTimestamp = 0;
+            animateCircle();
+        }
+
+        function animateCircle(timestamp) {
+            if (isPaused) {
+                animationFrameId = requestAnimationFrame(animateCircle);
+                return;
+            }
+
+            if (!lastTimestamp) lastTimestamp = timestamp;
+            const elapsed = timestamp - lastTimestamp;
+
+            if (elapsed > (1000 - (level - 1) * 100)) {
+                moveCircle();
+                lastTimestamp = timestamp;
+            }
+
+            animationFrameId = requestAnimationFrame(animateCircle);
+        }
+
+        function moveCircle() {
+            const circle = document.getElementById('circle');
+            const container = document.getElementById('game-container');
+            const jumpSizePx = cmToPx(jumpSize);
+            const circleSizePx = cmToPx(circleSize);
+
+            // Move to the right
+            currentX += jumpSizePx;
+
+            // If reached or passed the right edge
+            if (currentX + circleSizePx >= container.clientWidth) {
+                // Move to the start of the next row
+                currentX = 0;
+                currentY += circleSizePx;
+
+                // If reached or passed the bottom edge, start over from the top
+                if (currentY + circleSizePx > container.clientHeight) {
+                    currentY = 0;
+                }
+            }
+
+            circle.style.transform = `translate(${currentX}px, ${currentY}px)`;
+        }
+
+        function changeJumpSize(change) {
+            jumpSize = Math.max(1, Math.min(jumpSize + change, 6));
+            updateJumpSizeDisplay();
+            changeCircleColor();
+        }
+
+        function changeCircleColor() {
+            currentColorIndex = (currentColorIndex + 1) % colors.length;
+            document.getElementById('circle').style.backgroundColor = colors[currentColorIndex];
+        }
+
+        function nextLevel() {
+            if (level < 10) {
+                level++;
+                updateLevel();
+                startMovement();
+            }
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            document.querySelector('.button-container button:nth-child(2)').textContent = isPaused ? 'Reanudar' : 'Pausa';
+        }
+
+        function backToMenu() {
+            cancelAnimationFrame(animationFrameId);
+            document.getElementById('game-screen').style.display = 'none';
+            document.getElementById('start-screen').style.display = 'flex';
+        }
+
+        // Event listeners
+        document.getElementById('decrease').addEventListener('click', () => changeJumpSize(-1));
+        document.getElementById('increase').addEventListener('click', () => changeJumpSize(1));
+    </script>
+</body>
+</html>
